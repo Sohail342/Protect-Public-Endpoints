@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stateless Protection demo</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; color: #1c2430; }
+  h1 { font-size: 22px; } h2 { font-size: 16px; margin-top: 28px; }
+  button { font: inherit; padding: 6px 14px; margin-right: 8px; cursor: pointer; }
+  table { border-collapse: collapse; margin-top: 10px; width: 100%; }
+  td, th { border: 1px solid #d5dbe3; padding: 6px 10px; text-align: left; }
+  pre { background: #f3f5f8; padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; min-height: 20px; }
+  input { font: inherit; padding: 5px 8px; width: 260px; }
+  .muted { color: #5c6877; }
+</style>
+</head>
+<body>
+<h1>Stateless Protection demo</h1>
+<p class="muted">The page talks to two protected endpoints through <code>SP.fetch</code>. Open the network tab to see what actually crosses the wire.</p>
+
+<h2>1. Sealed read — <code>GET /api/rates</code></h2>
+<button id="load">Load rates with SP.fetch</button>
+<button id="raw">Same request with plain fetch</button>
+<div id="rates"></div>
+<pre id="readlog"></pre>
+
+<h2>2. Protected write — <code>POST /api/contact</code></h2>
+<input id="msg" value="Hello from a real browser">
+<button id="send">Send with SP.fetch</button>
+<pre id="writelog"></pre>
+
+<script src="/_sp/w/sp.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+$('load').onclick = async () => {
+  const t0 = performance.now();
+  try {
+    const res = await SP.fetch('/api/rates');
+    const rows = await res.json();
+    $('rates').innerHTML = '<table><tr><th>Lane</th><th>Mode</th><th>USD</th><th>Days</th></tr>' +
+      rows.map((r) => `<tr><td>${esc(r.lane)}</td><td>${esc(r.mode)}</td><td>${esc(r.usd)}</td><td>${esc(r.days)}</td></tr>`).join('') + '</table>';
+    $('readlog').textContent = `OK ${res.status} — ${rows.length} rows unsealed in ${(performance.now() - t0).toFixed(0)} ms`;
+  } catch (e) { $('readlog').textContent = 'FAILED: ' + e.message; }
+};
+
+$('raw').onclick = async () => {
+  const res = await fetch('/api/rates');
+  $('readlog').textContent = `plain fetch → HTTP ${res.status}: ${await res.text()}`;
+};
+
+$('send').onclick = async () => {
+  const t0 = performance.now();
+  try {
+    const res = await SP.fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: $('msg').value }),
+    });
+    $('writelog').textContent = `HTTP ${res.status}: ${await res.text()} (${(performance.now() - t0).toFixed(0)} ms)`;
+  } catch (e) { $('writelog').textContent = 'FAILED: ' + e.message; }
+};
+</script>
+</body>
+</html>
